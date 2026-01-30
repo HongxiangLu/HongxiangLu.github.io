@@ -1,0 +1,8 @@
+baseURL = "https://HongxiangLu.github.io/"
+languageCode = "zh-cn"
+title = "安川流"
+theme = "stack"
+hasCJKLanguage = true  # 开启中文统计优化
+
+[pagination]
+    pagerSize = 5

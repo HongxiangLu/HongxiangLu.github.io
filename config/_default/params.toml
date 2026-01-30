@@ -1,0 +1,18 @@
+# 默认去 content/post 文件夹找文章
+mainSections = ["posts"] 
+rssFullContent = true
+favicon = "img/avatar.png" # 浏览器标签页图标
+
+[sidebar]
+    subtitle = "我的技术博客"
+    avatar = "img/avatar.png"  # 侧边栏头像，请确保 assets/img/avatar.png 存在
+
+[footer]
+    since = 2026
+
+# 首页右侧显示的组件
+[widgets]
+    homepage = [
+        { type = "categories", params = { limit = 10 } }
+    ]
+    page = [{ type = "toc" }] # 文章页目录保留，这个很有用

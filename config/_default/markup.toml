@@ -1,0 +1,18 @@
+[goldmark]
+    [goldmark.renderer]
+        unsafe = true  # 允许在 Markdown 中写 HTML
+    [goldmark.extensions]
+        [goldmark.extensions.passthrough]
+            enable = true
+            [goldmark.extensions.passthrough.delimiters]
+                block  = [["$$", "$$"], ["\\[", "\\]"]]
+                inline = [["$", "$"], ["\\(", "\\)"]]  # <--- 已添加 $ 支持
+
+[highlight]
+    noClasses = false
+    codeFences = true
+    guessSyntax = true
+    lineNos = true
+    lineNumbersInTable = true
+    tabWidth = 4
+    style = "monokai"  # 代码高亮风格
