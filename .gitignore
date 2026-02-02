@@ -22,3 +22,6 @@ Desktop.ini
 # --- 编辑器配置 (可选，保持仓库纯净) ---
 .vscode/
 .idea/
+
+# --- 自动上传日记的脚本 ---
+diary_bot.py
