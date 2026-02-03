@@ -23,6 +23,5 @@ Desktop.ini
 .vscode/
 .idea/
 
-# --- 自动上传日记的脚本及其配置变量 ---
-diary_bot.py
+# --- 脚本diary_bot.py（用于自动上传日记）的配置变量 ---
 config.py
