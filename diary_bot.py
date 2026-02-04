@@ -6,12 +6,6 @@ import subprocess
 # 引入同级目录下的 config.py，用于配置变量
 import config
 
-def clean_text(text, encoding):
-    """解码邮件文本"""
-    if isinstance(text, bytes):
-        return text.decode(encoding or 'utf-8', errors='ignore')
-    return text
-
 
 def get_email_sender(msg):
     """获取并清理发件人地址"""
@@ -78,7 +72,7 @@ def git_commit_push(date_str):
 
         # 2. COMMIT
         subprocess.run(
-            [config.GIT_EXEC, 'commit', '-m', f"Diary Upload: {date_str}"],
+            [config.GIT_EXEC, 'commit', '-m', f"Diary upload automatically: {date_str}"],
             check=True,
             env=git_env
         )
@@ -95,88 +89,69 @@ def git_commit_push(date_str):
         print("--- 无变化或提交失败 ---")
 
 
-def main():
-    # 1. 确定我们要处理的时间范围：昨天 (脚本在今天凌晨运行)
-    today = datetime.date.today()
-    yesterday = today - datetime.timedelta(days=1)
+def process_emails(target_date):
+    """
+    连接邮箱，获取指定日期的日记，并写入本地文件。
+    返回: True (如果有新日记写入), False (如果没有日记)
+    """
+    imap_date_str = target_date.strftime("%d-%b-%Y")
 
-    # IMAP 搜索格式: "ON 31-Jan-2026"
-    imap_date_str = yesterday.strftime("%d-%b-%Y")
+    # 连接邮箱
+    mail = imaplib.IMAP4_SSL(config.IMAP_SERVER)
+    mail.login(config.EMAIL_USER, config.EMAIL_PASS)
+    mail.select('INBOX')
 
-    print(f"=== 任务开始: 处理 {yesterday} 的日记 ===")
+    # 搜索邮件
+    status, messages = mail.search(None, f'(ON "{imap_date_str}")')
+    email_ids = messages[0].split()
+    print(f"收到 {len(email_ids)} 封昨日邮件，开始筛选...")
 
-    # 2.【新增】第一步先同步代码！
-    # 建议加个 try-except，如果拉取失败就不继续了
-    try:
-        git_pull()
-    except Exception as e:
-        print(f"Git拉取失败，停止脚本以防冲突: {e}")
-        return
+    entries = []
 
-    # 3. 连接邮箱、筛选邮件
-    try:
-        mail = imaplib.IMAP4_SSL(config.IMAP_SERVER)
-        mail.login(config.EMAIL_USER, config.EMAIL_PASS)
-        mail.select('INBOX')
+    for e_id in email_ids:
+        _, msg_data = mail.fetch(e_id, '(RFC822)')
+        msg = email.message_from_bytes(msg_data[0][1])
 
-        # 修改搜索策略：只按日期搜（靠谱），发件人我们自己过滤
-        status, messages = mail.search(None, f'(ON "{imap_date_str}")')
+        sender = get_email_sender(msg)
+        if config.ALLOWED_SENDER.lower() not in sender.lower():
+            print(f"跳过非目标发件人: {sender}")
+            continue
 
-        email_ids = messages[0].split()
-        print(f"收到 {len(email_ids)} 封昨日邮件，开始筛选...")
+        print(f"发现有效日记，来自: {sender}")
 
-        entries = []
+        # 处理时间
+        date_tuple = email.utils.parsedate_tz(msg['Date'])
+        if date_tuple:
+            local_date = datetime.datetime.fromtimestamp(email.utils.mktime_tz(date_tuple))
+        else:
+            local_date = datetime.datetime.now()
 
-        for e_id in email_ids:
-            _, msg_data = mail.fetch(e_id, '(RFC822)')
-            msg = email.message_from_bytes(msg_data[0][1])
+        content = get_email_content(msg)
+        if content:
+            entries.append((local_date, content))
 
-            # --- 关键修改：Python 端严格过滤发件人 ---
-            sender = get_email_sender(msg)
-            # 转换为小写比较，防止大小写差异
-            if config.ALLOWED_SENDER.lower() not in sender.lower():
-                print(f"跳过非目标发件人: {sender}")
-                continue
+    if not entries:
+        print("📭 昨天没有收到符合要求的日记。")
+        mail.logout()
+        return False  # 告诉主程序：没干活，不用提交
 
-            print(f"发现有效日记，来自: {sender}")
+    # 按时间排序
+    entries.sort(key=lambda x: x[0])
 
-            # 处理时间
-            date_tuple = email.utils.parsedate_tz(msg['Date'])
-            if date_tuple:
-                local_date = datetime.datetime.fromtimestamp(email.utils.mktime_tz(date_tuple))
-            else:
-                local_date = datetime.datetime.now()  # 兜底
+    # 准备写入文件
+    month_str = target_date.strftime("%Y-%m")
+    filename = f"{month_str}.md"
+    full_path = os.path.join(config.REPO_PATH, config.DIARY_DIR, filename)
 
-            content = get_email_content(msg)
-            if content:
-                entries.append((local_date, content))
+    os.makedirs(os.path.dirname(full_path), exist_ok=True)
+    is_new_file = not os.path.exists(full_path)
 
-        if not entries:
-            print("📭 昨天没有收到符合要求的日记。")
-            mail.logout()
-            return
-
-        # 按时间排序 (早发的在前)
-        entries.sort(key=lambda x: x[0])
-
-        # 4. 准备文件写入
-        # 文件名格式: YYYY-MM.md (例如 2026-02.md)
-        month_str = yesterday.strftime("%Y-%m")
-        filename = f"{month_str}.md"
-        full_path = os.path.join(config.REPO_PATH, config.DIARY_DIR, filename)
-
-        # 确保目录存在
-        os.makedirs(os.path.dirname(full_path), exist_ok=True)
-
-        is_new_file = not os.path.exists(full_path)
-
-        with open(full_path, 'a', encoding='utf-8') as f:
-            # 如果是新文件（每月1号或者第一次写），写入 Hugo Stack Front Matter
-            if is_new_file:
-                print(f"创建新月度文件: {filename}")
-                front_matter = f"""---
+    with open(full_path, 'a', encoding='utf-8') as f:
+        if is_new_file:
+            print(f"创建新月度文件: {filename}")
+            front_matter = f"""---
 title: "{month_str} 日记"
-date: {yesterday.strftime("%Y-%m-%d")}T00:00:00+08:00
+date: {target_date.strftime("%Y-%m-%d")}T00:00:00+08:00
 slug: diary-{month_str}
 draft: false
 categories:
@@ -186,30 +161,46 @@ categories:
 > 本月日记归档。
 
 """
-                f.write(front_matter)
+            f.write(front_matter)
 
-            # 写入日期一级标题 (如果昨天已经写过，避免重复写日期头？
-            # 简单起见，我们每次写入都带日期头，或者你可以先读取文件判断。
-            # 这里按照你的需求：日期为一级标题)
+        f.write(f"\n# {target_date.strftime('%m-%d')}\n\n")
 
-            # 写入当天的所有内容
-            f.write(f"\n# {yesterday.strftime('%m-%d')}\n\n")
+        for time_obj, content in entries:
+            time_str = time_obj.strftime("%H:%M")
+            f.write(f"## {time_str}\n\n{content}\n\n")
 
-            for time_obj, content in entries:
-                time_str = time_obj.strftime("%H:%M")
-                f.write(f"## {time_str}\n\n")
-                # 处理一下邮件里的换行，将其变成 Markdown 的引用或者普通文本
-                f.write(f"{content}\n\n")
+    print("文件写入完成。")
+    mail.logout()
+    return True  # 告诉主程序：干活了，请提交！
 
-        print("文件写入完成。")
 
-        # 5. Git 推送
-        git_commit_push(yesterday.strftime("%Y-%m-%d"))
+def main():
+    # 1. 确定时间
+    today = datetime.date.today()
+    yesterday = today - datetime.timedelta(days=1)
 
-        mail.logout()
+    print(f"=== 任务开始: 处理 {yesterday} 的日记 ===")
+
+    # 2. 同步代码 (Fail-fast)
+    try:
+        git_pull()
+    except Exception as e:
+        print(f"Git拉取失败，停止脚本: {e}")
+        return
+
+    # 3. 处理邮件并写入文件
+    try:
+        # 调用刚才封装的函数，如果它返回 True，说明写入了新内容
+        has_updates = process_emails(yesterday)
+
+        if has_updates:
+            # 4. 只有在有更新时才推送
+            git_commit_push(yesterday.strftime("%Y-%m-%d"))
+        else:
+            print("--- 无新日记，无需 Git 推送 ---")
 
     except Exception as e:
-        print(f"❌ 发生严重错误: {e}")
+        print(f"❌ 处理邮件或文件时发生错误: {e}")
 
 
 if __name__ == "__main__":
