@@ -94,7 +94,11 @@ def process_emails(target_date):
     连接邮箱，获取指定日期的日记，并写入本地文件。
     返回: True (如果有新日记写入), False (如果没有日记)
     """
-    imap_date_str = target_date.strftime("%d-%b-%Y")
+    # 手动定义月份映射，确保生成如 "02-Feb-2026" 的标准格式
+    months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun",
+              "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
+    month_en = months[target_date.month - 1]
+    imap_date_str = f"{target_date.day:02d}-{month_en}-{target_date.year}"
 
     # 连接邮箱
     mail = imaplib.IMAP4_SSL(config.IMAP_SERVER)
@@ -125,6 +129,12 @@ def process_emails(target_date):
             local_date = datetime.datetime.fromtimestamp(email.utils.mktime_tz(date_tuple))
         else:
             local_date = datetime.datetime.now()
+
+        # 即使 IMAP 搜索返回了结果，也要在本地再次确认日期是否严格匹配
+        # 注意：这里比较的是 .date() (年月日)，忽略具体的时分秒
+        if local_date.date() != target_date:
+            print(f"跳过非目标日期的邮件: {local_date.date()}")
+            continue
 
         content = get_email_content(msg)
         if content:
