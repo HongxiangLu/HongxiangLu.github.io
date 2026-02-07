@@ -173,11 +173,11 @@ categories:
 """
             f.write(front_matter)
 
-        f.write(f"\n# {target_date.strftime('%m-%d')}\n\n")
+        f.write(f"\n## {target_date.strftime('%m-%d')}\n\n")
 
         for time_obj, content in entries:
             time_str = time_obj.strftime("%H:%M")
-            f.write(f"## {time_str}\n\n{content}\n\n")
+            f.write(f"### {time_str}\n\n{content}\n\n")
 
     print("文件写入完成。")
     mail.logout()
