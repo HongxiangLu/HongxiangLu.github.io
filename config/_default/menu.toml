@@ -6,3 +6,10 @@
     weight = 1
     [main.params]
         icon = "home"
+[[main]]
+    identifier = "selfies"
+    name = "每日自拍"
+    url = "/selfies/"
+    weight = 2
+    [main.params]
+        icon = "camera"
