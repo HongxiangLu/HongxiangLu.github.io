@@ -2,38 +2,39 @@
 title: "每日自拍"
 ---
 
-/* === 强制接管 Stack 的相册排版 === */
+
 <style>
+/* === 强制接管 Stack 的相册排版 === */
 /* 1. 默认手机端排版：3列，间隙较小 */
 .gallery {
-    display: grid !important;
+    /*display: grid !important;*/
     grid-template-columns: repeat(3, 1fr) !important;
-    gap: 4px !important; /* 保持精细的间隙 */
+    /*gap: 4px !important; !* 保持精细的间隙 *!*/
 }
 
 /* 2. 电脑端排版（屏幕宽度 > 768px）：5列，间隙略大 */
 @media (min-width: 768px) {
     .gallery {
         grid-template-columns: repeat(5, 1fr) !important;
-        gap: 8px !important; 
+        /*gap: 8px !important; */
     }
 }
 
 /* 3. Instagram 魔法：强制 1:1 正方形并覆盖主题默认间距 */
-.gallery .gallery-item {
-    margin: 0 !important;
-    width: 100% !important;
-    aspect-ratio: 1 / 1 !important; 
-    overflow: hidden;
-    border-radius: 4px; /* 可选：给图片加一点点圆角，看着更舒服 */
-}
+/*.gallery .gallery-item {*/
+/*    margin: 0 !important;*/
+/*    width: 100% !important;*/
+/*    aspect-ratio: 1 / 1 !important; */
+/*    overflow: hidden;*/
+/*    border-radius: 4px; !* 可选：给图片加一点点圆角，看着更舒服 *!*/
+/*}*/
 
 /* 4. 保证图片填满正方形且不变形 */
-.gallery .gallery-item img {
-    width: 100% !important;
-    height: 100% !important;
-    object-fit: cover !important; 
-}
+/*.gallery .gallery-item img {*/
+/*    width: 100% !important;*/
+/*    height: 100% !important;*/
+/*    object-fit: cover !important; */
+/*}*/
 </style>
 
 ![2026-01-21](2026-01-21.jpg)
