@@ -7,9 +7,9 @@
     [main.params]
         icon = "home"
 [[main]]
-    identifier = "selfies"
+    identifier = "selfie"
     name = "每日自拍"
-    url = "/selfies/"
+    url = "/selfie/"
     weight = 2
     [main.params]
         icon = "home"
