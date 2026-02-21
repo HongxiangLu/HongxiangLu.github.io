@@ -5,14 +5,8 @@ title: "每日自拍"
 <style>
 .gallery {
     display: grid !important;
-    grid-template-columns: repeat(3, 1fr) !important; /* 强制 3 列，均分宽度 */
+    grid-template-columns: repeat(5, 1fr) !important; /* 强制 3 列，均分宽度 */
     gap: 4px !important; /* 照片之间的缝隙大小，可自己调 */
-    margin: 0 !important;
-}
-.gallery img {
-    width: 100% !important;
-    aspect-ratio: 1 / 1 !important; /* 强制裁剪为 1:1 正方形 */
-    object-fit: cover !important; /* 保证图片不变形，自动居中裁剪 */
     margin: 0 !important;
 }
 </style>
