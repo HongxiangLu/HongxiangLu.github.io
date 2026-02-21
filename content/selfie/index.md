@@ -3,7 +3,7 @@ title: "每日自拍"
 ---
 
 /* === 强制接管 Stack 的相册排版 === */
-
+<style>
 /* 1. 默认手机端排版：3列，间隙较小 */
 .gallery {
     display: grid !important;
