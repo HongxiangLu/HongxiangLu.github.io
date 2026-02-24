@@ -173,7 +173,7 @@ categories:
 """
             f.write(front_matter)
 
-        f.write(f"\n## {target_date.strftime('%m-%d')}\n\n")
+        f.write(f"## {target_date.strftime('%m-%d')}\n\n")
 
         for time_obj, content in entries:
             time_str = time_obj.strftime("%H:%M")
