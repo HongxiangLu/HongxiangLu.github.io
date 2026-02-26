@@ -1,5 +1,5 @@
 # 默认去 content/post 文件夹找文章
-mainSections = ["tech", "diary"] 
+mainSections = ["tech", "diary", "work"]
 rssFullContent = true
 favicon = "img/avatar.png" # 浏览器标签页图标
 
