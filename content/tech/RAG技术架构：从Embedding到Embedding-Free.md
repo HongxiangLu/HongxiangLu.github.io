@@ -5,7 +5,6 @@ slug: rag-architecture
 draft: false
 categories:
     - "技术"
-math: true
 ---
 
 本文梳理了目前检索增强生成（RAG）领域的技术选型，主要分为依赖向量化的传统RAG工具，和前沿的无向量化（Embedding-Free）RAG理论。
