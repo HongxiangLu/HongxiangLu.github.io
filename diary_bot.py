@@ -4,8 +4,15 @@ import datetime
 import os
 import subprocess
 import time
+import logging
 # 引入同级目录下的 config.py，用于配置变量
 import config
+
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s [%(levelname)s] %(message)s",
+    datefmt="%Y-%m-%d %H:%M:%S"
+)
 
 
 def get_email_sender(msg):
@@ -34,8 +41,8 @@ def get_email_content(msg):
     return content.strip()
 
 
-def _get_git_auth():
-    """返回 Git 认证 URL 和环境变量（内部复用）"""
+def get_git_auth():
+    """返回 Git 认证 URL 和环境变量"""
     auth_url = f"https://{config.GITHUB_TOKEN}@github.com/{config.GITHUB_USER}/{config.GITHUB_REPO}.git"
     git_env = os.environ.copy()
     git_env["GIT_TERMINAL_PROMPT"] = "0"
@@ -44,8 +51,8 @@ def _get_git_auth():
 
 # --- Git操作：拉取（失败会抛出异常） ---
 def git_pull():
-    print(">>> 正在拉取远程更新 (Pull)...")
-    auth_url, git_env = _get_git_auth()
+    logging.info("正在拉取远程更新 (Pull)...")
+    auth_url, git_env = get_git_auth()
     os.chdir(config.REPO_PATH)
     subprocess.run(
         [config.GIT_EXEC, 'pull', auth_url, 'main', '--no-edit', '--no-rebase'],
@@ -53,13 +60,13 @@ def git_pull():
         env=git_env,
         timeout=120
     )
-    print("✅ 拉取完成")
+    logging.info("✅ 拉取完成")
 
 
 # --- Git操作：推送（带重试，失败不中断） ---
 def git_push(max_retries=3):
     """尝试推送本地 commit，失败不抛异常，返回是否成功"""
-    auth_url, git_env = _get_git_auth()
+    auth_url, git_env = get_git_auth()
     os.chdir(config.REPO_PATH)
     for attempt in range(1, max_retries + 1):
         try:
@@ -69,20 +76,20 @@ def git_push(max_retries=3):
                 env=git_env,
                 timeout=120
             )
-            print("✅ 推送成功")
+            logging.info("✅ 推送成功")
             return True
         except (subprocess.CalledProcessError, subprocess.TimeoutExpired) as e:
-            print(f"⚠️ 推送失败 (第 {attempt}/{max_retries} 次): {e}")
+            logging.warning(f"推送失败 (第 {attempt}/{max_retries} 次): {e}")
             if attempt < max_retries:
                 time.sleep(5 * attempt)  # 递增等待
-    print("❌ 推送在多次重试后仍然失败，将在下次运行时重试")
+    logging.error("推送在多次重试后仍然失败，将在下次运行时重试")
     return False
 
 
 # --- Git操作：提交并推送 ---
 def git_commit_push(date_str):
-    print(">>> 正在提交更改...")
-    _, git_env = _get_git_auth()
+    logging.info("正在提交更改...")
+    _, git_env = get_git_auth()
     os.chdir(config.REPO_PATH)
 
     try:
@@ -93,7 +100,7 @@ def git_commit_push(date_str):
             env=git_env
         )
     except subprocess.CalledProcessError:
-        print("--- 无变化，无需提交 ---")
+        logging.info("无变化，无需提交")
         return
 
     git_push()
@@ -118,7 +125,7 @@ def process_emails(target_date):
     # 搜索邮件
     status, messages = mail.search(None, f'(ON "{imap_date_str}")')
     email_ids = messages[0].split()
-    print(f"收到 {len(email_ids)} 封昨日邮件，开始筛选...")
+    logging.info(f"收到 {len(email_ids)} 封昨日邮件，开始筛选...")
 
     entries = []
 
@@ -151,10 +158,10 @@ def process_emails(target_date):
             entries.append((local_date, content))
 
     if skipped_sender or skipped_date:
-        print(f"已跳过: 发件人不符 {skipped_sender} 封, 日期不符 {skipped_date} 封")
+        logging.info(f"已跳过: 发件人不符 {skipped_sender} 封, 日期不符 {skipped_date} 封")
 
     if not entries:
-        print("📭 昨天没有收到符合要求的日记。")
+        logging.info("📭 昨天没有收到符合要求的日记。")
         mail.logout()
         return False  # 告诉主程序：没干活，不用提交
 
@@ -171,7 +178,7 @@ def process_emails(target_date):
 
     with open(full_path, 'a', encoding='utf-8') as f:
         if is_new_file:
-            print(f"创建新月度文件: {filename}")
+            logging.info(f"创建新月度文件: {filename}")
             front_matter = f"""---
 title: "{month_str} 日记"
 date: {target_date.strftime("%Y-%m-%d")}T00:00:00+08:00
@@ -192,7 +199,7 @@ categories:
             time_str = time_obj.strftime("%H:%M")
             f.write(f"### {time_str}\n\n{content}\n\n")
 
-    print("文件写入完成。")
+    logging.info("文件写入完成。")
     mail.logout()
     return True  # 告诉主程序：干活了，请提交！
 
@@ -202,17 +209,17 @@ def main():
     today = datetime.date.today()
     yesterday = today - datetime.timedelta(days=1)
 
-    print(f"=== 任务开始: 处理 {yesterday} 的日记 ===")
+    logging.info(f"=== 任务开始: 处理 {yesterday} 的日记 ===")
 
     # 2. 先推送残留的本地 commit（容错，不中断）
-    print(">>> 尝试推送残留 commit...")
+    logging.info("尝试推送残留 commit...")
     git_push()
 
     # 3. 拉取远程最新内容（Fail-fast）
     try:
         git_pull()
     except Exception as e:
-        print(f"❌ Git 拉取失败，停止脚本: {e}")
+        logging.error(f"Git 拉取失败，停止脚本: {e}")
         return
 
     # 4. 处理邮件并写入文件
@@ -223,10 +230,10 @@ def main():
             # 5. 提交并推送新内容
             git_commit_push(yesterday.strftime("%Y-%m-%d"))
         else:
-            print("--- 无新日记，无需 Git 推送 ---")
+            logging.info("无新日记，无需 Git 推送")
 
     except Exception as e:
-        print(f"❌ 处理邮件或文件时发生错误: {e}")
+        logging.error(f"处理邮件或文件时发生错误: {e}")
 
 
 if __name__ == "__main__":
