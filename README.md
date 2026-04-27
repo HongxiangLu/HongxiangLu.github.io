@@ -21,31 +21,18 @@
   - 记录实习工作进展（如文通天下实习记录）。
 - **`content/selfie/` (生活记录)**：
   - 用于展示日常生活照片与简短记录。
-- **`themes/stack/demo/content` (参考模板)**：
-  - 这是 Stack 主题自带的示例目录，展示了标准的 Hugo 内容管理方式：
-    - `post/`：常规博客文章。
-    - `page/`：关于我、归档等静态页面。
-    - `categories/`：分类体系结构。
-
----
 
 ## 🛠 Git 提交规范 (Git Commit Convention)
 
-为了保持提交历史的清晰和可读性，本项目遵循以下提交规范。在执行 `git commit -m` 时，请根据修改内容选择合适的学术前缀：
+为了保持提交历史的清晰和可读性，本项目遵循以下提交规范。在执行 `git commit -m` 时，请根据修改内容选择合适的前缀：
 
 | 前缀 | 适用场景 | 示例 |
 | :--- | :--- | :--- |
-| **`diary:`** | 自动或手动更新日记内容 | `diary: upload manually 2026-04-27` |
-| **`work:`** | 更新实习工作、研究进展、学习笔记 | `work: add research notes on TTS models` |
-| **`life:`** | 上传照片、更新生活动态（Selfie 模块） | `life: add new daily selfies for April` |
+| **`diary:`** | 自动或手动更新日记内容 | `diary: upload manually 26-04-27` |
+| **`work:`** | 更新实习工作、学习笔记 | `work: add research notes on TTS models / on 26-04-27` |
+| **`life:`** | 上传照片、更新生活动态 | `life: add daily selfies for April` |
 | **`feat:`** | 为自动化脚本（如 `diary_bot.py`）添加新功能 | `feat: add retry logic for git push` |
 | **`fix:`** | 修复 Bug 或配置文件错误 | `fix: resolve date format issue in diary bot` |
 | **`docs:`** | 修改 README 或其他项目文档 | `docs: update commit convention in README` |
 | **`refactor:`** | 重构代码，不改变原有逻辑 | `refactor: clean up email parsing logic` |
 | **`style:`** | 修改样式文件 (CSS/SCSS) 或格式调整 | `style: update gallery layout to 3 columns` |
-
-
-## ⚙️ 快速配置
-1. 修改 `config.py` 中的邮箱与 GitHub Token。
-2. 确保本地安装了 Python 3 及其依赖。
-3. 如果是在 Linux 服务器上运行，建议配置 `cron` 定时执行 `diary_bot.py`。
