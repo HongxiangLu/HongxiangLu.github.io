@@ -206,6 +206,7 @@ categories:
 
 def main():
     # 1. 确定时间
+    # today = datetime.date(2026, 4, 27)
     today = datetime.date.today()
     yesterday = today - datetime.timedelta(days=1)
 
