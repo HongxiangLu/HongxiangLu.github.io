@@ -125,7 +125,7 @@ def process_emails(target_date):
     # 搜索邮件
     status, messages = mail.search(None, f'(ON "{imap_date_str}")')
     email_ids = messages[0].split()
-    logging.info(f"收到 {len(email_ids)} 封昨日邮件，开始筛选...")
+    logging.info(f"收到 {len(email_ids)} 封邮件，开始筛选...")
 
     entries = []
 
@@ -161,7 +161,7 @@ def process_emails(target_date):
         logging.info(f"已跳过: 发件人不符 {skipped_sender} 封, 日期不符 {skipped_date} 封")
 
     if not entries:
-        logging.info("📭 昨天没有收到符合要求的日记。")
+        logging.info("📭 没有收到符合要求的日记。")
         mail.logout()
         return False  # 告诉主程序：没干活，不用提交
 
