@@ -5,6 +5,7 @@ import os
 import subprocess
 import time
 import logging
+import re
 # 引入同级目录下的 config.py，用于配置变量
 import config
 
@@ -38,7 +39,13 @@ def get_email_content(msg):
         payload = msg.get_payload(decode=True)
         charset = msg.get_content_charset()
         content = payload.decode(charset or 'utf-8', errors='ignore')
-    return content.strip()
+    
+    content = content.strip()
+    # 统一换行符，将 \r\n 转换为 \n
+    content = content.replace('\r\n', '\n')
+    # 将3个及以上的连续换行替换为2个换行（即段落之间只保留一个空行）
+    content = re.sub(r'\n{3,}', '\n\n', content)
+    return content
 
 
 def get_git_auth():
@@ -95,7 +102,7 @@ def git_commit_push(date_str):
     try:
         subprocess.run([config.GIT_EXEC, 'add', '.'], check=True, env=git_env)
         subprocess.run(
-            [config.GIT_EXEC, 'commit', '-m', f"Diary upload automatically: {date_str}"],
+            [config.GIT_EXEC, 'commit', '-m', f"diary: 自动上传日记 {date_str}"],
             check=True,
             env=git_env
         )
@@ -111,11 +118,16 @@ def process_emails(target_date):
     连接邮箱，获取指定日期的日记，并写入本地文件。
     返回: True (如果有新日记写入), False (如果没有日记)
     """
-    # 手动定义月份映射，确保生成如 "02-Feb-2026" 的标准格式
+    # 手动定义月份映射，确保生成标准格式 (避免 locale 影响)
     months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun",
               "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
-    month_en = months[target_date.month - 1]
-    imap_date_str = f"{target_date.day:02d}-{month_en}-{target_date.year}"
+    
+    # 扩大服务端搜索范围，前后扩展一天避免时区偏差导致漏读
+    since_date = target_date - datetime.timedelta(days=1)
+    before_date = target_date + datetime.timedelta(days=2) # BEFORE 是不包含当天的
+    
+    imap_since = f"{since_date.day:02d}-{months[since_date.month - 1]}-{since_date.year}"
+    imap_before = f"{before_date.day:02d}-{months[before_date.month - 1]}-{before_date.year}"
 
     # 连接邮箱
     mail = imaplib.IMAP4_SSL(config.IMAP_SERVER)
@@ -123,9 +135,9 @@ def process_emails(target_date):
     mail.select('INBOX')
 
     # 搜索邮件
-    status, messages = mail.search(None, f'(ON "{imap_date_str}")')
+    status, messages = mail.search(None, f'(SINCE "{imap_since}" BEFORE "{imap_before}")')
     email_ids = messages[0].split()
-    logging.info(f"收到 {len(email_ids)} 封邮件，开始筛选...")
+    logging.info(f"服务端粗筛收到 {len(email_ids)} 封邮件，开始本地精确筛选...")
 
     entries = []
 
@@ -137,7 +149,8 @@ def process_emails(target_date):
         msg = email.message_from_bytes(msg_data[0][1])
 
         sender = get_email_sender(msg)
-        if config.ALLOWED_SENDER.lower() not in sender.lower():
+        # 精确判定发件人
+        if sender.lower() != config.ALLOWED_SENDER.lower():
             skipped_sender += 1
             continue
 
