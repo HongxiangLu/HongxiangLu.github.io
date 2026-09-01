@@ -10,10 +10,5 @@ REPO_PATH = '/root/Blogs'   # 你的本地仓库绝对路径
 DIARY_DIR = 'content/diary' # 相对于仓库根目录的日记路径
 
 # #################### 自动化脚本配置 ####################
-# ==================== GitHub 配置 ====================
-GITHUB_USER = 'HongxiangLu' # 例如: zhangsan
-GITHUB_REPO = 'HongxiangLu.github.io'   # 例如: zhangsan.github.io
-GITHUB_TOKEN = '[ENCRYPTION_KEY]'
-
 # ==================== 路径配置 ====================
 GIT_EXEC = '/root/miniconda3/bin/git'   # Git 的绝对路径

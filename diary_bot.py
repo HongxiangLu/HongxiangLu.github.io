@@ -1,13 +1,19 @@
 import imaplib
-import email
 import datetime
 import os
 import subprocess
 import time
 import logging
-import re
+from email import message_from_bytes
 # 引入同级目录下的 config.py，用于配置变量
 import config
+from diary_fetch import (
+    find_sent_mailbox,
+    get_email_content,
+    get_email_sender,
+    get_email_sent_datetime,
+    quote_imap_mailbox,
+)
 
 logging.basicConfig(
     level=logging.INFO,
@@ -16,55 +22,18 @@ logging.basicConfig(
 )
 
 
-def get_email_sender(msg):
-    """获取并清理发件人地址"""
-    header_val = msg.get("From")
-    if not header_val:
-        return ""
-    # email.utils.parseaddr 会把 "Name <email@xxx.com>" 解析成 ('Name', 'email@xxx.com')
-    # 我们只取第二个元素，即纯邮箱地址
-    return email.utils.parseaddr(header_val)[1].strip()
-
-
-def get_email_content(msg):
-    """从邮件对象中提取纯文本内容"""
-    content = ""
-    if msg.is_multipart():
-        for part in msg.walk():
-            if part.get_content_type() == "text/plain":
-                payload = part.get_payload(decode=True)
-                charset = part.get_content_charset()
-                content += payload.decode(charset or 'utf-8', errors='ignore')
-    else:
-        payload = msg.get_payload(decode=True)
-        charset = msg.get_content_charset()
-        content = payload.decode(charset or 'utf-8', errors='ignore')
-    
-    content = content.strip()
-    # 统一换行符，将 \r\n 转换为 \n
-    content = content.replace('\r\n', '\n')
-    # 将3个及以上的连续换行替换为2个换行（即段落之间只保留一个空行）
-    content = re.sub(r'\n{3,}', '\n\n', content)
-    return content
-
-
-def get_git_auth():
-    """返回 Git 认证 URL 和环境变量"""
-    auth_url = f"https://{config.GITHUB_TOKEN}@github.com/{config.GITHUB_USER}/{config.GITHUB_REPO}.git"
-    git_env = os.environ.copy()
-    git_env["GIT_TERMINAL_PROMPT"] = "0"
-    return auth_url, git_env
+GIT_ENV = os.environ.copy()
+GIT_ENV["GIT_TERMINAL_PROMPT"] = "0"
 
 
 # --- Git操作：拉取（失败会抛出异常） ---
 def git_pull():
     logging.info("正在拉取远程更新 (Pull)...")
-    auth_url, git_env = get_git_auth()
     os.chdir(config.REPO_PATH)
     subprocess.run(
-        [config.GIT_EXEC, 'pull', auth_url, 'main', '--no-edit', '--no-rebase'],
+        [config.GIT_EXEC, 'pull', 'origin', 'main', '--no-edit', '--no-rebase'],
         check=True,
-        env=git_env,
+        env=GIT_ENV,
         timeout=120
     )
     logging.info("✅ 拉取完成")
@@ -73,14 +42,13 @@ def git_pull():
 # --- Git操作：推送（带重试，失败不中断） ---
 def git_push(max_retries=3):
     """尝试推送本地 commit，失败不抛异常，返回是否成功"""
-    auth_url, git_env = get_git_auth()
     os.chdir(config.REPO_PATH)
     for attempt in range(1, max_retries + 1):
         try:
             subprocess.run(
-                [config.GIT_EXEC, 'push', auth_url, 'main'],
+                [config.GIT_EXEC, 'push', 'origin', 'main'],
                 check=True,
-                env=git_env,
+                env=GIT_ENV,
                 timeout=120
             )
             logging.info("✅ 推送成功")
@@ -96,15 +64,14 @@ def git_push(max_retries=3):
 # --- Git操作：提交并推送 ---
 def git_commit_push(date_str):
     logging.info("正在提交更改...")
-    _, git_env = get_git_auth()
     os.chdir(config.REPO_PATH)
 
     try:
-        subprocess.run([config.GIT_EXEC, 'add', '.'], check=True, env=git_env)
+        subprocess.run([config.GIT_EXEC, 'add', '.'], check=True, env=GIT_ENV)
         subprocess.run(
             [config.GIT_EXEC, 'commit', '-m', f"diary: 自动上传日记 {date_str}"],
             check=True,
-            env=git_env
+            env=GIT_ENV
         )
     except subprocess.CalledProcessError:
         logging.info("无变化，无需提交")
@@ -118,35 +85,32 @@ def process_emails(target_date):
     连接邮箱，获取指定日期的日记，并写入本地文件。
     返回: True (如果有新日记写入), False (如果没有日记)
     """
-    # 手动定义月份映射，确保生成标准格式 (避免 locale 影响)
-    months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun",
-              "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
-    
-    # 扩大服务端搜索范围，前后扩展一天避免时区偏差导致漏读
-    since_date = target_date - datetime.timedelta(days=1)
-    before_date = target_date + datetime.timedelta(days=2) # BEFORE 是不包含当天的
-    
-    imap_since = f"{since_date.day:02d}-{months[since_date.month - 1]}-{since_date.year}"
-    imap_before = f"{before_date.day:02d}-{months[before_date.month - 1]}-{before_date.year}"
-
-    # 连接邮箱
+    # 连接邮箱并选择已发送目录。腾讯企业邮不支持 EXAMINE，因此使用 SELECT；
+    # 邮件读取使用 BODY.PEEK[]，不会修改已读标记。
     mail = imaplib.IMAP4_SSL(config.IMAP_SERVER)
     mail.login(config.EMAIL_USER, config.EMAIL_PASS)
-    mail.select('INBOX')
+    sent_mailbox = find_sent_mailbox(mail)
+    select_status, _ = mail.select(quote_imap_mailbox(sent_mailbox))
+    if select_status != "OK":
+        raise RuntimeError("无法打开已发送文件夹")
+    logging.info(f"已选择已发送文件夹: {sent_mailbox}")
 
-    # 搜索邮件
-    status, messages = mail.search(None, f'(SINCE "{imap_since}" BEFORE "{imap_before}")')
+    # 腾讯企业邮的 SENTSINCE 不可靠，因此获取全部邮件并在本地按发送日期筛选。
+    status, messages = mail.search(None, "ALL")
+    if status != "OK":
+        raise RuntimeError("无法搜索已发送文件夹中的邮件")
     email_ids = messages[0].split()
-    logging.info(f"服务端粗筛收到 {len(email_ids)} 封邮件，开始本地精确筛选...")
+    logging.info(f"IMAP已发送文件夹共有 {len(email_ids)} 封邮件，开始按发送时间在本地精确筛选...")
 
     entries = []
 
     skipped_sender = 0
+    skipped_invalid_date = 0
     skipped_date = 0
 
     for e_id in email_ids:
-        _, msg_data = mail.fetch(e_id, '(RFC822)')
-        msg = email.message_from_bytes(msg_data[0][1])
+        _, msg_data = mail.fetch(e_id, '(BODY.PEEK[])')
+        msg = message_from_bytes(msg_data[0][1])
 
         sender = get_email_sender(msg)
         # 精确判定发件人
@@ -154,24 +118,25 @@ def process_emails(target_date):
             skipped_sender += 1
             continue
 
-        # 处理时间
-        date_tuple = email.utils.parsedate_tz(msg['Date'])
-        if date_tuple:
-            local_date = datetime.datetime.fromtimestamp(email.utils.mktime_tz(date_tuple))
-        else:
-            local_date = datetime.datetime.now()
+        sent_datetime = get_email_sent_datetime(msg)
+        if sent_datetime is None:
+            skipped_invalid_date += 1
+            continue
 
-        # 即使 IMAP 搜索返回了结果，也要在本地再次确认日期是否严格匹配
-        if local_date.date() != target_date:
+        if sent_datetime.date() != target_date:
             skipped_date += 1
             continue
 
         content = get_email_content(msg)
         if content:
-            entries.append((local_date, content))
+            entries.append((sent_datetime, content))
 
-    if skipped_sender or skipped_date:
-        logging.info(f"已跳过: 发件人不符 {skipped_sender} 封, 日期不符 {skipped_date} 封")
+    if skipped_sender or skipped_invalid_date or skipped_date:
+        logging.info(
+            f"已跳过: 发件人不符 {skipped_sender} 封, "
+            f"发送时间无效 {skipped_invalid_date} 封, "
+            f"发送日期不符 {skipped_date} 封"
+        )
 
     if not entries:
         logging.info("📭 没有收到符合要求的日记。")
