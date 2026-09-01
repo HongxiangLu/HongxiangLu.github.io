@@ -106,10 +106,10 @@ def get_email_content(msg):
         content = payload.decode(charset or 'utf-8', errors='ignore')
     
     content = content.strip()
-    # 统一换行符，将 \r\n 转换为 \n
-    content = content.replace('\r\n', '\n')
-    # 将3个及以上的连续换行替换为2个换行（即段落之间只保留一个空行）
-    content = re.sub(r'\n{3,}', '\n\n', content)
+    # 统一不同系统的换行符，再把连续换行统一为两个 \n。
+    # 这样原文中的单换行会在 Markdown 中成为段落间空行，多余空行也会收敛。
+    content = content.replace('\r\n', '\n').replace('\r', '\n')
+    content = re.sub(r'\n+', '\n\n', content)
     return content
 
 
