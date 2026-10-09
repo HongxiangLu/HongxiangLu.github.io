@@ -26,17 +26,25 @@ GIT_ENV = os.environ.copy()
 GIT_ENV["GIT_TERMINAL_PROMPT"] = "0"
 
 
-# --- Git操作：拉取（失败会抛出异常） ---
-def git_pull():
-    logging.info("正在拉取远程更新 (Pull)...")
+# --- Git操作：拉取（带重试，最终失败会抛出异常） ---
+def git_pull(max_retries=3):
     os.chdir(config.REPO_PATH)
-    subprocess.run(
-        [config.GIT_EXEC, 'pull', 'origin', 'main', '--no-edit', '--no-rebase'],
-        check=True,
-        env=GIT_ENV,
-        timeout=120
-    )
-    logging.info("✅ 拉取完成")
+    for attempt in range(1, max_retries + 1):
+        try:
+            logging.info(f"正在拉取远程更新 (Pull，第 {attempt}/{max_retries} 次)...")
+            subprocess.run(
+                [config.GIT_EXEC, 'pull', 'origin', 'main', '--no-edit', '--no-rebase'],
+                check=True,
+                env=GIT_ENV,
+                timeout=120
+            )
+            logging.info("✅ 拉取完成")
+            return
+        except (subprocess.CalledProcessError, subprocess.TimeoutExpired) as e:
+            logging.warning(f"拉取失败 (第 {attempt}/{max_retries} 次): {e}")
+            if attempt == max_retries:
+                raise
+            time.sleep(5 * attempt)
 
 
 # --- Git操作：推送（带重试，失败不中断） ---
